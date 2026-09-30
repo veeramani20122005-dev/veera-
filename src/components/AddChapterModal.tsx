@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Image, Sparkles, BookOpen, MessageSquare, Volume2 } from 'lucide-react';
+import { X, Plus, Trash2, Image, Sparkles, BookOpen, MessageSquare, Volume2, Upload } from 'lucide-react';
 import { Chapter, ComicPage, ComicPanel, SpeechBubble, SfxSticker } from '../types/comic';
 import { playClickSound, playBooyahSound } from '../utils/audio';
+import { ComicImage } from './ComicImage';
 
 interface AddChapterModalProps {
   isOpen: boolean;
@@ -346,9 +347,33 @@ export const AddChapterModal: React.FC<AddChapterModalProps> = ({
 
           {/* Cover Art Selection */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-              Select Chapter Cover Art
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
+                Select Chapter Cover Art
+              </label>
+              <label className="cursor-pointer text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1.5 bg-amber-400/10 hover:bg-amber-400/20 px-2.5 py-1 rounded-lg border border-amber-400/30 transition-all active:scale-95">
+                <Upload className="w-3.5 h-3.5" />
+                <span>Upload Custom Cover</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (typeof reader.result === 'string') {
+                          setCoverImage(reader.result);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {availableArtwork.map((art, idx) => (
                 <div
@@ -363,11 +388,11 @@ export const AddChapterModal: React.FC<AddChapterModalProps> = ({
                       : 'border-slate-700 opacity-60 hover:opacity-100'
                   }`}
                 >
-                  <img
+                  <ComicImage
                     src={art}
                     alt={`Art ${idx + 1}`}
-                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
+                    fallbackTitle={`Preset Art ${idx + 1}`}
                   />
                   {coverImage === art && (
                     <div className="absolute top-1 right-1 bg-amber-400 text-black text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
@@ -394,7 +419,7 @@ export const AddChapterModal: React.FC<AddChapterModalProps> = ({
               <button
                 type="button"
                 onClick={handleAddPage}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold rounded-lg border border-slate-700 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold rounded-lg border border-slate-700 transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Page</span>
@@ -416,7 +441,7 @@ export const AddChapterModal: React.FC<AddChapterModalProps> = ({
                       <button
                         type="button"
                         onClick={() => handleRemovePage(pageIdx)}
-                        className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 hover:underline"
+                        className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 hover:underline cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Delete Page</span>
@@ -439,7 +464,32 @@ export const AddChapterModal: React.FC<AddChapterModalProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] text-slate-400 block mb-1">Page Artwork</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] text-slate-400">Page Artwork</label>
+                        <label className="cursor-pointer text-[10px] text-amber-400 hover:underline flex items-center gap-1">
+                          <Upload className="w-3 h-3" />
+                          <span>Upload Image File</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  if (typeof reader.result === 'string') {
+                                    const updated = [...pages];
+                                    updated[pageIdx].imageSrc = reader.result;
+                                    setPages(updated);
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
                       <select
                         value={p.imageSrc}
                         onChange={(e) => {
@@ -454,6 +504,9 @@ export const AddChapterModal: React.FC<AddChapterModalProps> = ({
                             Illustration Style #{idx + 1}
                           </option>
                         ))}
+                        {p.imageSrc.startsWith('data:') && (
+                          <option value={p.imageSrc}>Uploaded Custom Image File</option>
+                        )}
                       </select>
                     </div>
                   </div>

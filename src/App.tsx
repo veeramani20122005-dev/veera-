@@ -11,28 +11,29 @@ import { AddChapterModal } from './components/AddChapterModal';
 import { SquadModal } from './components/SquadModal';
 import { GuidedPanelModal } from './components/GuidedPanelModal';
 import { INITIAL_CHAPTERS } from './data/chaptersData';
+import { ComicImage, AVAILABLE_ARTWORKS, resolveComicImageUrl } from './components/ComicImage';
 import { Chapter } from './types/comic';
 import { playClickSound, playBooyahSound } from './utils/audio';
 import { BookOpen, Sparkles, ChevronRight, HelpCircle, Layers, Users } from 'lucide-react';
 
-const STORAGE_KEY_CHAPTERS = 'squad_chronicles_chapters_v1';
+const STORAGE_KEY_CHAPTERS = 'squad_chronicles_chapters_v2';
 const STORAGE_KEY_LAST_READ = 'squad_chronicles_last_chapter_v1';
-
-const AVAILABLE_ARTWORKS = [
-  '/src/assets/images/comic_ch1_squad_call_1790748208639.jpg',
-  '/src/assets/images/comic_ch2_shadow_rift_1790748220650.jpg',
-  '/src/assets/images/comic_ch3_storm_battle_1790748236018.jpg',
-  '/src/assets/images/comic_ch4_booyah_victory_1790748249982.jpg'
-];
 
 export default function App() {
   const [chapters, setChapters] = useState<Chapter[]>(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_CHAPTERS);
+      const stored = localStorage.getItem(STORAGE_KEY_CHAPTERS) || localStorage.getItem('squad_chronicles_chapters_v1');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map((ch: Chapter) => ({
+            ...ch,
+            coverImage: resolveComicImageUrl(ch.coverImage),
+            pages: (ch.pages || []).map((p) => ({
+              ...p,
+              imageSrc: resolveComicImageUrl(p.imageSrc),
+            })),
+          }));
         }
       }
     } catch {
@@ -123,6 +124,24 @@ export default function App() {
     }
   };
 
+  const handleUpdatePageImage = (chapterId: string, pageId: string, newImageSrc: string) => {
+    setChapters((prev) =>
+      prev.map((ch) => {
+        if (ch.id !== chapterId) return ch;
+        return {
+          ...ch,
+          pages: ch.pages.map((p) => (p.id === pageId ? { ...p, imageSrc: newImageSrc } : p)),
+        };
+      })
+    );
+  };
+
+  const handleUpdateChapterCover = (chapterId: string, newCoverSrc: string) => {
+    setChapters((prev) =>
+      prev.map((ch) => (ch.id === chapterId ? { ...ch, coverImage: newCoverSrc } : ch))
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans selection:bg-amber-400 selection:text-black">
       {/* Top Header */}
@@ -147,6 +166,7 @@ export default function App() {
             onSelectChapter={handleSelectChapter}
             onOpenAddChapter={() => setIsAddChapterOpen(true)}
             onOpenGuidedPanel={handleOpenGuidedPanel}
+            onUpdatePageImage={handleUpdatePageImage}
             soundEnabled={soundEnabled}
           />
         )}
@@ -171,7 +191,7 @@ export default function App() {
                   playClickSound(soundEnabled);
                   setIsAddChapterOpen(true);
                 }}
-                className="flex items-center gap-2 px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-black font-bold text-sm rounded-xl shadow-lg shadow-amber-400/20 active:scale-95 transition-all self-start sm:self-auto"
+                className="flex items-center gap-2 px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-black font-bold text-sm rounded-xl shadow-lg shadow-amber-400/20 active:scale-95 transition-all self-start sm:self-auto cursor-pointer"
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Create New Chapter</span>
@@ -188,11 +208,14 @@ export default function App() {
                   }`}
                 >
                   <div className="relative aspect-3/4 overflow-hidden bg-black">
-                    <img
+                    <ComicImage
                       src={ch.coverImage}
                       alt={ch.title}
-                      referrerPolicy="no-referrer"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      fallbackTitle={ch.title}
+                      fallbackBadge={`ISSUE #${ch.number}`}
+                      allowUpload={true}
+                      onImageUploaded={(newCover) => handleUpdateChapterCover(ch.id, newCover)}
                     />
                     <div className="absolute top-2 left-2 bg-black/85 backdrop-blur-xs text-amber-400 font-comic text-sm px-2.5 py-0.5 rounded border border-amber-400/30">
                       ISSUE #{ch.number}

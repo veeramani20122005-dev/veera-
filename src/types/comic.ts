@@ -1,5 +1,5 @@
 export type ReadingMode = 'single' | 'double' | 'webtoon' | 'guided';
-export type PaperTheme = 'white' | 'vintage' | 'dark' | 'neon';
+export type PaperTheme = 'white' | 'vintage' | 'dark' | 'neon' | 'manga' | 'modern';
 
 export interface SpeechBubble {
   id: string;

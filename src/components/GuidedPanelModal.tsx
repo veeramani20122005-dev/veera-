@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight, Volume2, Shield, Zap, Crosshair, Award } from 'lucide-react';
 import { ComicPanel, Chapter } from '../types/comic';
 import { playClickSound, playActionHitSound, playPageFlipSound, speakDialogue } from '../utils/audio';
+import { ComicImage } from './ComicImage';
 
 interface GuidedPanelModalProps {
   isOpen: boolean;
@@ -110,11 +111,12 @@ export const GuidedPanelModal: React.FC<GuidedPanelModalProps> = ({
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col md:flex-row gap-6 items-center justify-center bg-radial from-[#1e293b]/70 to-[#0b0f17]">
           {/* Visual Artwork Snapshot */}
           <div className="relative w-full md:w-1/2 aspect-4/3 rounded-xl overflow-hidden border-2 border-slate-700 shadow-2xl bg-black group shrink-0">
-            <img
+            <ComicImage
               src={activeItem.pageImage}
               alt={activePanel.title}
-              referrerPolicy="no-referrer"
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              fallbackTitle={activePanel.title}
+              fallbackBadge={`PANEL ${activeItem.panel.panelNumber}`}
             />
             {/* Status Killfeed / Zone overlay if present */}
             {activePanel.statusBanner && (

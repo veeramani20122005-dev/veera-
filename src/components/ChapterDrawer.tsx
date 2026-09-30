@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Plus, BookOpen, Clock, Trash2, CheckCircle2, ChevronRight } from 'lucide-react';
 import { Chapter } from '../types/comic';
 import { playClickSound } from '../utils/audio';
+import { ComicImage } from './ComicImage';
 
 interface ChapterDrawerProps {
   isOpen: boolean;
@@ -97,11 +98,12 @@ export const ChapterDrawer: React.FC<ChapterDrawerProps> = ({
                 <div className="flex gap-3.5 items-start">
                   {/* Thumbnail / Cover Art */}
                   <div className="relative w-20 h-28 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 shrink-0">
-                    <img
+                    <ComicImage
                       src={ch.coverImage}
                       alt={ch.title}
-                      referrerPolicy="no-referrer"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      fallbackTitle={ch.title}
+                      fallbackBadge={`CH.${ch.number}`}
                     />
                     <div className="absolute top-1 left-1 bg-black/85 backdrop-blur-xs text-[10px] font-action px-1.5 py-0.5 rounded text-amber-400">
                       CH.{ch.number}

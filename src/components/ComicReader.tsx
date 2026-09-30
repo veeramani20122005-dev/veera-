@@ -13,13 +13,16 @@ import {
   Book, 
   Columns, 
   Rows, 
-  Focus,
   Volume2,
-  ChevronDown
+  Upload,
+  Layers,
+  ArrowRight,
+  ArrowLeft
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { Chapter, ComicPage, ComicPanel, PaperTheme, ReadingMode } from '../types/comic';
+import { Chapter, ComicPage, PaperTheme, ReadingMode } from '../types/comic';
 import { playPageFlipSound, playClickSound, playBooyahSound, speakDialogue } from '../utils/audio';
+import { ComicImage } from './ComicImage';
 
 interface ComicReaderProps {
   chapter: Chapter;
@@ -27,6 +30,7 @@ interface ComicReaderProps {
   onSelectChapter: (chapterId: string) => void;
   onOpenAddChapter: () => void;
   onOpenGuidedPanel: (panelIndex: number) => void;
+  onUpdatePageImage?: (chapterId: string, pageId: string, newImageSrc: string) => void;
   soundEnabled: boolean;
 }
 
@@ -36,6 +40,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
   onSelectChapter,
   onOpenAddChapter,
   onOpenGuidedPanel,
+  onUpdatePageImage,
   soundEnabled
 }) => {
   const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
@@ -47,11 +52,14 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
   const [pageTurnDirection, setPageTurnDirection] = useState<'next' | 'prev'>('next');
   const [isSwapping, setIsSwapping] = useState<boolean>(false);
 
-  // Touch and drag swipe state
+  // Touch and mouse drag swipe state
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
+  const mouseStartX = useRef<number | null>(null);
+  const [isMouseDown, setIsMouseDown] = useState<boolean>(false);
   const [dragOffset, setDragOffset] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const totalPages = chapter.pages.length;
   const currentPage = chapter.pages[currentPageIndex] || chapter.pages[0];
@@ -61,52 +69,63 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
   // Reset page index when chapter changes
   useEffect(() => {
     setCurrentPageIndex(0);
+    setDragOffset(0);
   }, [chapter.id]);
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
         return;
       }
-      if (e.key === 'ArrowRight' || e.key === ' ') {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'd' || e.key === 'D') {
         e.preventDefault();
         goToNextPage();
-      } else if (e.key === 'ArrowLeft') {
+      } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
         e.preventDefault();
         goToPrevPage();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentPageIndex, totalPages, soundEnabled]);
 
-  // Autoplay timer
+  // Auto-swap feature
   useEffect(() => {
-    if (!autoPlay) return;
-    const interval = setInterval(() => {
-      if (currentPageIndex < totalPages - 1) {
-        goToNextPage();
-      } else {
-        setAutoPlay(false);
-      }
-    }, 4500);
-    return () => clearInterval(interval);
+    let interval: NodeJS.Timeout | null = null;
+    if (autoPlay) {
+      interval = setInterval(() => {
+        if (currentPageIndex < totalPages - 1) {
+          triggerPageSwap('next', currentPageIndex + 1);
+        } else {
+          setAutoPlay(false);
+        }
+      }, 4500);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [autoPlay, currentPageIndex, totalPages]);
 
-  // Check if final page with Booyah reached
+  // Celebrate Booyah! on final panels
   useEffect(() => {
-    const isBooyah = currentPage?.panels.some((p) =>
-      p.speechBubbles.some((sb) => sb.text.toLowerCase().includes('booyah') || sb.text.toLowerCase().includes('did it'))
+    const isBooyah = currentPage?.panels?.some((p) =>
+      p.speechBubbles?.some((sb) => sb.text.toLowerCase().includes('booyah') || sb.text.toLowerCase().includes('did it'))
     );
     if (isBooyah && currentPageIndex === totalPages - 1) {
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
-      playBooyahSound(soundEnabled);
+      try {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+        playBooyahSound(soundEnabled);
+      } catch {
+        // Fallback
+      }
     }
   }, [currentPageIndex, totalPages, currentPage, soundEnabled]);
 
@@ -125,7 +144,6 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
     if (currentPageIndex < totalPages - 1) {
       triggerPageSwap('next', currentPageIndex + 1);
     } else if (nextChapter) {
-      // Jump to next chapter if at end of current chapter
       playPageFlipSound(soundEnabled);
       onSelectChapter(nextChapter.id);
     }
@@ -149,8 +167,8 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
     if (touchStartX.current === null) return;
     touchEndX.current = e.targetTouches[0].clientX;
     const diff = touchEndX.current - touchStartX.current;
-    if (Math.abs(diff) < 150) {
-      setDragOffset(diff * 0.4);
+    if (Math.abs(diff) < 180) {
+      setDragOffset(diff * 0.45);
     }
   };
 
@@ -160,18 +178,51 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
       return;
     }
     const distance = touchStartX.current - touchEndX.current;
-    const isLeftSwipe = distance > 45;
-    const isRightSwipe = distance < -45;
-
-    if (isLeftSwipe) {
+    if (distance > 40) {
       goToNextPage();
-    } else if (isRightSwipe) {
+    } else if (distance < -40) {
       goToPrevPage();
-    } else {
-      setDragOffset(0);
     }
     touchStartX.current = null;
     touchEndX.current = null;
+    setDragOffset(0);
+  };
+
+  // Mouse Drag handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement)?.closest('button, a, input, select, .speech-bubble-item, label')) return;
+    setIsMouseDown(true);
+    mouseStartX.current = e.clientX;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isMouseDown || mouseStartX.current === null) return;
+    const diff = e.clientX - mouseStartX.current;
+    if (Math.abs(diff) < 220) {
+      setDragOffset(diff * 0.4);
+    }
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (!isMouseDown || mouseStartX.current === null) return;
+    const distance = mouseStartX.current - e.clientX;
+    if (distance > 45) {
+      goToNextPage();
+    } else if (distance < -45) {
+      goToPrevPage();
+    }
+    setIsMouseDown(false);
+    mouseStartX.current = null;
+    setDragOffset(0);
+  };
+
+  const handleMouseLeave = () => {
+    if (isMouseDown) {
+      setIsMouseDown(false);
+      mouseStartX.current = null;
+      setDragOffset(0);
+    }
   };
 
   // Fullscreen toggle
@@ -184,62 +235,77 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
     }
   };
 
+  // Page image file replacement handler
+  const handlePageImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onUpdatePageImage && currentPage) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          playBooyahSound(soundEnabled);
+          onUpdatePageImage(chapter.id, currentPage.id, reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // Paper Theme Classes
   const getThemeClasses = () => {
     switch (paperTheme) {
       case 'vintage':
-        return 'bg-[#f4ebd0] text-[#1c1917] border-[#d4c5a9]';
-      case 'white':
-        return 'bg-[#fafafa] text-[#0f172a] border-slate-300';
-      case 'neon':
-        return 'bg-[#070b14] text-[#38bdf8] border-cyan-500/40 shadow-cyan-500/10';
+        return 'bg-[#f7f0e3] text-stone-900 border-[#d3c0a5] shadow-[0_20px_50px_rgba(40,30,20,0.35)]';
+      case 'manga':
+        return 'bg-[#eaeaea] text-black border-zinc-400 grayscale contrast-110 shadow-2xl';
+      case 'modern':
+        return 'bg-white text-slate-900 border-slate-200 shadow-2xl';
       case 'dark':
       default:
-        return 'bg-[#111827] text-slate-100 border-slate-800';
+        return 'bg-[#0f1422] text-slate-100 border-slate-800 shadow-[0_25px_60px_rgba(0,0,0,0.8)]';
     }
   };
 
   return (
     <div
       ref={containerRef}
-      className="w-full flex flex-col bg-[#0b0f19] min-h-[calc(100vh-65px)] select-none text-slate-100"
+      className={`flex-1 flex flex-col relative select-none ${
+        isFullscreen ? 'fixed inset-0 z-50 bg-[#070a12]' : 'w-full'
+      }`}
     >
-      {/* Chapter Information Banner & Mode Controls Bar */}
-      <div className="bg-[#0f1626]/95 border-b border-slate-800/80 px-4 py-2.5 sm:px-6">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
-          {/* Chapter Metadata */}
-          <div className="flex items-center gap-2.5">
-            <span className="font-action text-sm tracking-wider uppercase px-2 py-0.5 rounded bg-amber-500 text-black font-bold">
-              ISSUE #{chapter.number}
+      {/* Reader Controls Toolbar */}
+      <div className="bg-[#0b101c]/90 backdrop-blur-md border-b border-slate-800 px-3 py-2 sm:px-6 z-30">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+          {/* Chapter & Page Progress */}
+          <div className="flex items-center gap-2">
+            <span className="bg-amber-400 text-black font-action font-black px-2 py-0.5 rounded text-[11px] uppercase tracking-wider">
+              Issue #{chapter.number}
             </span>
-            <div className="flex items-center gap-2 text-slate-300">
-              <span className="font-comic text-base text-white tracking-wide truncate max-w-[200px] sm:max-w-xs">
-                {chapter.title}
-              </span>
-              <span className="hidden sm:inline text-slate-500">·</span>
-              <span className="hidden sm:inline text-slate-400">
-                Page {currentPageIndex + 1} of {totalPages}
-              </span>
-            </div>
+            <span className="font-comic text-white text-sm sm:text-base hidden sm:inline">
+              {chapter.title}
+            </span>
+            <span className="text-slate-400 font-mono text-xs">
+              Page {currentPageIndex + 1}/{totalPages}
+            </span>
           </div>
 
-          {/* Reader Controls Toolbar */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Reading Mode Segmented Control */}
-            <div className="flex items-center p-0.5 bg-slate-900 rounded-lg border border-slate-800">
+          {/* Reader Mode & View Tools */}
+          <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+            {/* Reading Mode Switcher */}
+            <div className="flex items-center bg-slate-800/80 p-0.5 rounded-lg border border-slate-700/60">
               <button
                 onClick={() => {
                   playClickSound(soundEnabled);
                   setReadingMode('single');
                 }}
-                className={`p-1.5 rounded-md transition-colors ${
+                className={`p-1.5 rounded text-xs flex items-center gap-1 transition-all ${
                   readingMode === 'single'
-                    ? 'bg-amber-500 text-black font-bold shadow-xs'
+                    ? 'bg-amber-400 text-black font-bold shadow'
                     : 'text-slate-400 hover:text-white'
                 }`}
                 title="Single Page Mode (Swipe to swap)"
               >
                 <Book className="w-3.5 h-3.5" />
+                <span className="hidden md:inline text-[11px]">Single</span>
               </button>
 
               <button
@@ -247,14 +313,15 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                   playClickSound(soundEnabled);
                   setReadingMode('double');
                 }}
-                className={`hidden sm:block p-1.5 rounded-md transition-colors ${
+                className={`p-1.5 rounded text-xs flex items-center gap-1 transition-all ${
                   readingMode === 'double'
-                    ? 'bg-amber-500 text-black font-bold shadow-xs'
+                    ? 'bg-amber-400 text-black font-bold shadow'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title="Double Page Spread (Book Mode)"
+                title="Double Spread (Book Mode)"
               >
                 <Columns className="w-3.5 h-3.5" />
+                <span className="hidden md:inline text-[11px]">Book Spread</span>
               </button>
 
               <button
@@ -262,81 +329,90 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                   playClickSound(soundEnabled);
                   setReadingMode('webtoon');
                 }}
-                className={`p-1.5 rounded-md transition-colors ${
+                className={`p-1.5 rounded text-xs flex items-center gap-1 transition-all ${
                   readingMode === 'webtoon'
-                    ? 'bg-amber-500 text-black font-bold shadow-xs'
+                    ? 'bg-amber-400 text-black font-bold shadow'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title="Webtoon / Vertical Scroll Mode"
+                title="Webtoon Vertical Scroll"
               >
                 <Rows className="w-3.5 h-3.5" />
+                <span className="hidden md:inline text-[11px]">Webtoon</span>
               </button>
             </div>
-
-            {/* Cinematic Guided View Trigger */}
-            <button
-              onClick={() => {
-                playClickSound(soundEnabled);
-                onOpenGuidedPanel(0);
-              }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-colors font-medium text-[11px]"
-              title="Launch Guided Cinematic Panel View"
-            >
-              <Focus className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Cinematic View</span>
-            </button>
 
             {/* Paper Theme Selector */}
-            <div className="hidden lg:flex items-center gap-1 text-[11px] text-slate-400">
-              <button
-                onClick={() => setPaperTheme('dark')}
-                className={`px-2 py-0.5 rounded ${paperTheme === 'dark' ? 'bg-slate-700 text-white' : 'hover:text-slate-200'}`}
-              >
-                Dark
-              </button>
-              <button
-                onClick={() => setPaperTheme('vintage')}
-                className={`px-2 py-0.5 rounded ${paperTheme === 'vintage' ? 'bg-[#f4ebd0] text-black font-bold' : 'hover:text-slate-200'}`}
-              >
-                Pulp
-              </button>
-              <button
-                onClick={() => setPaperTheme('white')}
-                className={`px-2 py-0.5 rounded ${paperTheme === 'white' ? 'bg-white text-black font-bold' : 'hover:text-slate-200'}`}
-              >
-                White
-              </button>
-            </div>
+            <select
+              value={paperTheme}
+              onChange={(e) => {
+                playClickSound(soundEnabled);
+                setPaperTheme(e.target.value as PaperTheme);
+              }}
+              className="bg-slate-800 text-slate-300 text-xs rounded-md px-2 py-1.5 border border-slate-700 focus:outline-hidden hover:border-slate-500 cursor-pointer"
+            >
+              <option value="dark">Dark Comic</option>
+              <option value="vintage">Vintage Print</option>
+              <option value="manga">Manga Halftone</option>
+              <option value="modern">Clean Light</option>
+            </select>
 
             {/* Zoom Controls */}
-            <div className="hidden sm:flex items-center gap-1 border-l border-slate-800 pl-2">
+            <div className="hidden sm:flex items-center gap-0.5 bg-slate-800/80 p-0.5 rounded-lg border border-slate-700/60">
               <button
-                onClick={() => setZoomLevel((z) => Math.max(z - 15, 80))}
+                onClick={() => setZoomLevel((z) => Math.max(z - 10, 70))}
                 className="p-1 text-slate-400 hover:text-white rounded"
                 title="Zoom Out"
               >
                 <ZoomOut className="w-3.5 h-3.5" />
               </button>
-              <span className="text-[11px] font-mono text-slate-400 min-w-8 text-center">
-                {zoomLevel}%
-              </span>
+              <span className="text-[11px] font-mono text-slate-300 px-1">{zoomLevel}%</span>
               <button
-                onClick={() => setZoomLevel((z) => Math.min(z + 15, 160))}
+                onClick={() => setZoomLevel((z) => Math.min(z + 10, 140))}
                 className="p-1 text-slate-400 hover:text-white rounded"
                 title="Zoom In"
               >
                 <ZoomIn className="w-3.5 h-3.5" />
               </button>
-              <button
-                onClick={() => setZoomLevel(100)}
-                className="p-1 text-slate-400 hover:text-white rounded"
-                title="Reset Zoom"
-              >
-                <RotateCcw className="w-3 h-3" />
-              </button>
+              {zoomLevel !== 100 && (
+                <button
+                  onClick={() => setZoomLevel(100)}
+                  className="p-1 text-amber-400 hover:text-amber-300 rounded"
+                  title="Reset Zoom"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                </button>
+              )}
             </div>
 
-            {/* Autoplay Slideshow */}
+            {/* Upload / Replace Current Page Image Button */}
+            {onUpdatePageImage && (
+              <label
+                title="Upload custom comic scan for this page"
+                className="cursor-pointer flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-400/10 hover:bg-amber-400/20 text-amber-400 border border-amber-400/40 text-[11px] font-action font-bold transition-all active:scale-95"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Upload Image</span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePageImageFileSelect}
+                  className="hidden"
+                />
+              </label>
+            )}
+
+            {/* Guided Panels Shortcut */}
+            <button
+              onClick={() => onOpenGuidedPanel(0)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-semibold transition-all active:scale-95"
+              title="Open Cinematic Panel-by-Panel View"
+            >
+              <Layers className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden md:inline">Panels</span>
+            </button>
+
+            {/* Auto-Swap Button */}
             <button
               onClick={() => {
                 playClickSound(soundEnabled);
@@ -344,7 +420,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
               }}
               className={`p-1.5 rounded-md border transition-colors ${
                 autoPlay
-                  ? 'bg-amber-500 text-black border-amber-400'
+                  ? 'bg-amber-400 text-black border-amber-400 font-bold'
                   : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
               }`}
               title={autoPlay ? 'Pause Auto-Swap' : 'Start Auto-Swap (4.5s)'}
@@ -366,30 +442,34 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
 
       {/* Main Comic Canvas Area */}
       <div 
-        className="flex-1 relative flex items-center justify-center p-2 sm:p-6 overflow-hidden"
+        className="flex-1 relative flex items-center justify-center p-2 sm:p-6 overflow-hidden cursor-grab active:cursor-grabbing"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
       >
-        {/* Left Click Zone to swap previous */}
+        {/* Left Click Hotspot to swap previous */}
         <div
           onClick={goToPrevPage}
-          className="absolute left-0 top-0 bottom-0 w-12 sm:w-20 z-20 cursor-pointer flex items-center justify-start pl-2 opacity-0 hover:opacity-100 transition-opacity group"
-          title="Click or swipe right for previous page"
+          className="absolute left-0 top-0 bottom-0 w-12 sm:w-24 z-20 cursor-pointer flex items-center justify-start pl-2 sm:pl-4 opacity-30 hover:opacity-100 transition-opacity group"
+          title="Click to swap to previous page"
         >
-          <div className="w-10 h-10 rounded-full bg-black/75 border border-slate-700 flex items-center justify-center text-white group-hover:scale-110 shadow-lg transition-transform">
-            <ChevronLeft className="w-6 h-6" />
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-black/80 border border-slate-700 flex items-center justify-center text-white group-hover:scale-110 shadow-xl transition-all">
+            <ChevronLeft className="w-6 h-6 sm:w-7 sm:h-7 text-amber-400" />
           </div>
         </div>
 
-        {/* Right Click Zone to swap next */}
+        {/* Right Click Hotspot to swap next */}
         <div
           onClick={goToNextPage}
-          className="absolute right-0 top-0 bottom-0 w-12 sm:w-20 z-20 cursor-pointer flex items-center justify-end pr-2 opacity-0 hover:opacity-100 transition-opacity group"
-          title="Click or swipe left for next page"
+          className="absolute right-0 top-0 bottom-0 w-12 sm:w-24 z-20 cursor-pointer flex items-center justify-end pr-2 sm:pr-4 opacity-30 hover:opacity-100 transition-opacity group"
+          title="Click to swap to next page"
         >
-          <div className="w-10 h-10 rounded-full bg-black/75 border border-slate-700 flex items-center justify-center text-white group-hover:scale-110 shadow-lg transition-transform">
-            <ChevronRight className="w-6 h-6" />
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-black/80 border border-slate-700 flex items-center justify-center text-white group-hover:scale-110 shadow-xl transition-all">
+            <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7 text-amber-400" />
           </div>
         </div>
 
@@ -410,19 +490,26 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                 </div>
 
                 <div className="relative aspect-3/4 w-full bg-black">
-                  <img
+                  <ComicImage
                     src={pg.imageSrc}
                     alt={pg.title}
-                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
+                    fallbackTitle={pg.title}
+                    fallbackBadge={`PAGE ${pIdx + 1}`}
+                    allowUpload={true}
+                    onImageUploaded={(newSrc) => onUpdatePageImage?.(chapter.id, pg.id, newSrc)}
                   />
+
                   {/* Floating speech bubbles */}
-                  {pg.panels.map((pan) =>
-                    pan.speechBubbles.map((sb) => (
+                  {pg.panels?.map((pan) =>
+                    pan.speechBubbles?.map((sb) => (
                       <div
                         key={sb.id}
-                        onClick={() => speakDialogue(sb.text, sb.speaker)}
-                        className="absolute cursor-pointer transition-transform hover:scale-105 active:scale-95 bg-white text-black font-semibold rounded-2xl px-3 py-1.5 text-xs shadow-xl border-2 border-black max-w-[200px]"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          speakDialogue(sb.text, sb.speaker);
+                        }}
+                        className="speech-bubble-item absolute cursor-pointer transition-transform hover:scale-105 active:scale-95 bg-white text-black font-semibold rounded-2xl px-3 py-1.5 text-xs shadow-xl border-2 border-black max-w-[200px]"
                         style={{
                           top: `${sb.position?.y ?? 25}%`,
                           left: `${sb.position?.x ?? 30}%`,
@@ -440,13 +527,13 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
 
                 {/* Panel Script Summary */}
                 <div className="p-4 space-y-3 bg-black/20">
-                  {pg.panels.map((pan) => (
+                  {pg.panels?.map((pan) => (
                     <div key={pan.id} className="p-3 rounded-lg bg-black/40 border border-slate-700/60">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-comic text-base text-amber-400">{pan.title}</span>
                         <button
                           onClick={() => onOpenGuidedPanel(0)}
-                          className="text-[11px] text-slate-300 hover:text-white underline"
+                          className="text-[11px] text-slate-300 hover:text-white underline cursor-pointer"
                         >
                           Cinematic View
                         </button>
@@ -455,17 +542,17 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                         <p className="text-xs text-slate-300 italic mb-2">"{pan.caption}"</p>
                       )}
                       <div className="space-y-1.5">
-                        {pan.speechBubbles.map((sb) => (
+                        {pan.speechBubbles?.map((sb) => (
                           <div key={sb.id} className="text-xs flex items-center justify-between">
                             <span className="text-slate-200">
                               <strong className="text-amber-400">{sb.speaker}:</strong> "{sb.text}"
                             </span>
                             <button
                               onClick={() => speakDialogue(sb.text, sb.speaker)}
-                              className="text-amber-400 hover:text-amber-300 p-1"
-                              title="Listen"
+                              className="text-slate-400 hover:text-amber-400 p-1"
+                              title="Listen voice line"
                             >
-                              <Volume2 className="w-3 h-3" />
+                              <Volume2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         ))}
@@ -484,11 +571,14 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
           >
             {/* Left Page */}
             <div className={`w-1/2 aspect-3/4 rounded-l-2xl overflow-hidden border-2 shadow-2xl relative transition-all ${getThemeClasses()}`}>
-              <img
+              <ComicImage
                 src={currentPage.imageSrc}
                 alt={currentPage.title}
-                referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
+                fallbackTitle={currentPage.title}
+                fallbackBadge={`PAGE ${currentPageIndex + 1}`}
+                allowUpload={true}
+                onImageUploaded={(newSrc) => onUpdatePageImage?.(chapter.id, currentPage.id, newSrc)}
               />
               <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-black/60 to-transparent pointer-events-none" />
               <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-xs text-amber-400 px-2 py-0.5 rounded text-xs font-comic">
@@ -500,11 +590,16 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
             <div className={`w-1/2 aspect-3/4 rounded-r-2xl overflow-hidden border-2 shadow-2xl relative transition-all ${getThemeClasses()}`}>
               {chapter.pages[currentPageIndex + 1] ? (
                 <>
-                  <img
+                  <ComicImage
                     src={chapter.pages[currentPageIndex + 1].imageSrc}
                     alt={chapter.pages[currentPageIndex + 1].title}
-                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
+                    fallbackTitle={chapter.pages[currentPageIndex + 1].title}
+                    fallbackBadge={`PAGE ${currentPageIndex + 2}`}
+                    allowUpload={true}
+                    onImageUploaded={(newSrc) =>
+                      onUpdatePageImage?.(chapter.id, chapter.pages[currentPageIndex + 1].id, newSrc)
+                    }
                   />
                   <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-black/60 to-transparent pointer-events-none" />
                   <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-xs text-amber-400 px-2 py-0.5 rounded text-xs font-comic">
@@ -516,19 +611,19 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                   <Sparkles className="w-10 h-10 text-amber-400 mb-3" />
                   <h4 className="font-comic text-2xl text-white">END OF CHAPTER #{chapter.number}</h4>
                   <p className="text-xs text-slate-300 mt-2 max-w-xs">
-                    {nextChapter ? `Ready for Issue #${nextChapter.number}?` : 'You have completed all issues!'}
+                    {nextChapter ? `Ready for Issue #${nextChapter.number}?` : 'You have completed all current issues!'}
                   </p>
                   {nextChapter ? (
                     <button
                       onClick={() => onSelectChapter(nextChapter.id)}
-                      className="mt-4 px-4 py-2 bg-amber-400 text-black font-bold text-xs rounded-lg shadow-md hover:bg-amber-300 transition-colors"
+                      className="mt-4 px-4 py-2 bg-amber-400 text-black font-bold text-xs rounded-lg shadow-md hover:bg-amber-300 transition-colors cursor-pointer"
                     >
                       Read Next Chapter
                     </button>
                   ) : (
                     <button
                       onClick={onOpenAddChapter}
-                      className="mt-4 px-4 py-2 bg-amber-400 text-black font-bold text-xs rounded-lg shadow-md hover:bg-amber-300 transition-colors"
+                      className="mt-4 px-4 py-2 bg-amber-400 text-black font-bold text-xs rounded-lg shadow-md hover:bg-amber-300 transition-colors cursor-pointer"
                     >
                       Create More Chapters
                     </button>
@@ -538,7 +633,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
             </div>
           </div>
         ) : (
-          /* Single Page Mode with realistic Page Swap effect & Touch drag */
+          /* Single Page Mode with realistic Page Swap effect & Touch/Mouse drag */
           <div
             className="relative w-full max-w-xl aspect-3/4 mx-auto perspective-1500"
             style={{
@@ -557,54 +652,61 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
             >
               {/* Comic Page Artwork */}
               <div className="relative flex-1 bg-black overflow-hidden">
-                <img
+                <ComicImage
                   src={currentPage.imageSrc}
                   alt={currentPage.title}
-                  referrerPolicy="no-referrer"
                   className="w-full h-full object-cover select-none pointer-events-none"
+                  fallbackTitle={currentPage.title}
+                  fallbackBadge={`ISSUE #${chapter.number} · PAGE ${currentPageIndex + 1}`}
+                  allowUpload={true}
+                  onImageUploaded={(newSrc) => onUpdatePageImage?.(chapter.id, currentPage.id, newSrc)}
                 />
 
                 {/* Subtle paper lighting glare */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-black/30 via-transparent to-white/10 pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-tr from-black/25 via-transparent to-white/10 pointer-events-none" />
 
                 {/* Interactive Dialogue Speech Bubbles */}
-                {currentPage.panels.map((panel) =>
-                  panel.speechBubbles.map((sb) => (
+                {currentPage.panels?.map((panel) =>
+                  panel.speechBubbles?.map((sb) => (
                     <div
                       key={sb.id}
                       onClick={(e) => {
                         e.stopPropagation();
                         speakDialogue(sb.text, sb.speaker);
                       }}
-                      className={`absolute cursor-pointer transition-all hover:scale-110 active:scale-95 z-10 px-3 py-1.5 rounded-2xl border-2 border-black max-w-[210px] text-xs shadow-xl ${
+                      className={`speech-bubble-item absolute cursor-pointer transition-all hover:scale-110 active:scale-95 z-10 px-3 py-1.5 rounded-2xl border-2 border-black max-w-[210px] text-xs shadow-xl ${
                         sb.style === 'shout'
-                          ? 'bg-amber-300 text-black font-black uppercase tracking-wide'
-                          : sb.style === 'radio'
-                          ? 'bg-cyan-100 text-cyan-950 font-bold'
+                          ? 'bg-amber-300 text-black font-extrabold uppercase animate-pulse'
+                          : sb.style === 'thought'
+                          ? 'bg-blue-100 text-blue-950 italic border-dashed rounded-3xl'
+                          : sb.style === 'whisper'
+                          ? 'bg-slate-200 text-slate-900 border-dotted text-[11px]'
                           : 'bg-white text-slate-900 font-semibold'
                       }`}
                       style={{
                         top: `${sb.position?.y ?? 25}%`,
-                        left: `${sb.position?.x ?? 50}%`,
+                        left: `${sb.position?.x ?? 30}%`,
                         transform: 'translate(-50%, -50%)'
                       }}
-                      title="Click to hear speech line"
+                      title={`Click to hear ${sb.speaker}'s voice`}
                     >
-                      <div className="flex items-center justify-between gap-1 text-[9px] font-action tracking-wider text-slate-700">
-                        <span>{sb.speaker}</span>
-                        <Volume2 className="w-2.5 h-2.5 text-slate-500" />
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <span className="font-action font-black text-[10px] uppercase tracking-wider text-amber-700">
+                          {sb.speaker} {sb.roleTag && `(${sb.roleTag})`}
+                        </span>
+                        <Volume2 className="w-2.5 h-2.5 text-slate-500 ml-auto opacity-70" />
                       </div>
-                      <div className="leading-tight mt-0.5">"{sb.text}"</div>
+                      <div className="leading-snug">{sb.text}</div>
                     </div>
                   ))
                 )}
 
-                {/* Comic Action SFX Stickers */}
-                {currentPage.panels.map((panel) =>
+                {/* Action Sound Effect Stickers (BOOYAH!, WOOOOSH!) */}
+                {currentPage.panels?.map((panel) =>
                   panel.sfxStickers?.map((sfx) => (
                     <div
                       key={sfx.id}
-                      className="absolute font-comic text-2xl sm:text-3xl font-black drop-shadow-[0_4px_4px_rgba(0,0,0,0.9)] select-none pointer-events-none z-15"
+                      className="absolute font-action text-2xl sm:text-3xl font-black drop-shadow-[0_4px_6px_rgba(0,0,0,0.9)] select-none pointer-events-none tracking-wider animate-bounce"
                       style={{
                         top: `${sfx.position?.y ?? 70}%`,
                         left: `${sfx.position?.x ?? 50}%`,
@@ -619,7 +721,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
 
                 {/* Page Number & Arc Stamp */}
                 <div className="absolute top-3 left-3 bg-black/85 backdrop-blur-xs text-amber-400 font-comic text-sm px-2.5 py-0.5 rounded border border-amber-400/30 shadow">
-                  PAGE {currentPageIndex + 1}
+                  PAGE {currentPageIndex + 1} / {totalPages}
                 </div>
 
                 <div className="absolute top-3 right-3 bg-black/85 backdrop-blur-xs text-white text-[11px] font-bold px-2 py-0.5 rounded border border-slate-700 shadow">
@@ -635,7 +737,7 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
                   </p>
                   <button
                     onClick={() => onOpenGuidedPanel(0)}
-                    className="shrink-0 text-amber-400 hover:text-amber-300 font-bold ml-2 underline text-[11px]"
+                    className="shrink-0 text-amber-400 hover:text-amber-300 font-bold ml-2 underline text-[11px] cursor-pointer"
                   >
                     Open Panels
                   </button>
@@ -647,48 +749,54 @@ export const ComicReader: React.FC<ComicReaderProps> = ({
       </div>
 
       {/* Reader Bottom Navigation Scrubber Bar */}
-      <div className="bg-[#0e1524] border-t border-slate-800 p-3 sm:px-6">
+      <div className="bg-[#0e1524] border-t border-slate-800 p-3 sm:px-6 z-30">
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           {/* Previous Page or Previous Chapter */}
           <div className="flex items-center gap-2">
             <button
               onClick={goToPrevPage}
               disabled={currentPageIndex === 0 && !prevChapter}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-semibold text-white transition-all active:scale-95"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-semibold text-white transition-all active:scale-95 cursor-pointer shadow"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ArrowLeft className="w-4 h-4 text-amber-400" />
               <span>{currentPageIndex === 0 && prevChapter ? `Prev Chapter` : `Swap Prev`}</span>
             </button>
           </div>
 
-          {/* Page Scrubber & Thumbnails */}
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-center">
-            <input
-              type="range"
-              min={0}
-              max={totalPages - 1}
-              value={currentPageIndex}
-              onChange={(e) => {
-                const target = parseInt(e.target.value, 10);
-                triggerPageSwap(target > currentPageIndex ? 'next' : 'prev', target);
-              }}
-              className="w-36 sm:w-48 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-400"
-            />
-            <span className="text-xs font-mono font-bold text-amber-400 whitespace-nowrap">
-              {currentPageIndex + 1} / {totalPages}
-            </span>
+          {/* Page Scrubber Dots */}
+          <div className="flex items-center gap-1.5 max-w-full overflow-x-auto py-1 px-2">
+            {chapter.pages.map((pg, idx) => (
+              <button
+                key={pg.id}
+                onClick={() => {
+                  playPageFlipSound(soundEnabled);
+                  setCurrentPageIndex(idx);
+                }}
+                className={`transition-all rounded-full cursor-pointer ${
+                  currentPageIndex === idx
+                    ? 'w-7 h-2.5 bg-amber-400 ring-2 ring-amber-400/40'
+                    : 'w-2.5 h-2.5 bg-slate-700 hover:bg-slate-500'
+                }`}
+                title={`Go to Page ${idx + 1}`}
+              />
+            ))}
           </div>
 
           {/* Next Page or Next Chapter */}
           <div className="flex items-center gap-2">
             <button
               onClick={goToNextPage}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-xs font-bold text-black transition-all active:scale-95 shadow-md shadow-amber-400/20"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-xs font-black text-black transition-all active:scale-95 shadow-md shadow-amber-400/20 cursor-pointer"
             >
               <span>{currentPageIndex === totalPages - 1 && nextChapter ? `Next Chapter` : `Swap Next`}</span>
-              <ChevronRight className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4 text-black" />
             </button>
           </div>
+        </div>
+
+        {/* Reader swap instructions hint */}
+        <div className="text-center text-[11px] text-slate-400 mt-2 font-mono">
+          Tip: Drag left/right with touch or mouse, click screen edges, or use <kbd className="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300">←</kbd> <kbd className="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300">→</kbd> arrow keys to swap pages.
         </div>
       </div>
     </div>

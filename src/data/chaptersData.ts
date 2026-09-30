@@ -1,4 +1,5 @@
 import { Chapter, SquadMember } from '../types/comic';
+import { comicCh1, comicCh2, comicCh3, comicCh4 } from '../components/ComicImage';
 
 export const SQUAD_MEMBERS: SquadMember[] = [
   {
@@ -53,7 +54,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
     number: 1,
     title: 'The Call & The Signal',
     subtitle: 'Free Fire Squad Tournament: Where Legends Begin',
-    coverImage: '/src/assets/images/comic_ch1_squad_call_1790748208639.jpg',
+    coverImage: comicCh1,
     synopsis: 'Four friends unite with one dream in a fierce Free Fire tournament. When a mysterious anomaly appears above the battlegrounds, the match turns into something far greater than just a game.',
     badge: 'Origin Arc',
     readingTime: '4 min read',
@@ -63,7 +64,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
         pageNumber: 1,
         title: 'The Call & The Drop',
         subtitle: 'Act I: Four Friends, One Dream',
-        imageSrc: '/src/assets/images/comic_ch1_squad_call_1790748208639.jpg',
+        imageSrc: comicCh1,
         pageNarrative: 'In a dimly lit cyber room, four friends lock in their loadouts. A tournament that will change their destiny has officially begun.',
         panels: [
           {
@@ -168,7 +169,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
         pageNumber: 2,
         title: 'The Anomaly & The Gunfight',
         subtitle: 'Act II: The Sky Rift & Urban Clash',
-        imageSrc: '/src/assets/images/comic_ch2_shadow_rift_1790748220650.jpg',
+        imageSrc: comicCh2,
         pageNarrative: 'An eerie cyan rift ignites above the rooftops, while an aggressive enemy squad pins them down inside a warehouse.',
         panels: [
           {
@@ -301,7 +302,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
         pageNumber: 3,
         title: 'The Final Storm & The Clutch',
         subtitle: 'Act III: Championship Showdown',
-        imageSrc: '/src/assets/images/comic_ch3_storm_battle_1790748236018.jpg',
+        imageSrc: comicCh3,
         pageNarrative: 'The storm zone closes to a razor edge. Thunder rips through the sky as Karthi spots the rival squad leader.',
         panels: [
           {
@@ -428,7 +429,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
         pageNumber: 4,
         title: 'Booyah! & The Aftermath',
         subtitle: 'Act IV: Four Players, One Dream',
-        imageSrc: '/src/assets/images/comic_ch4_booyah_victory_1790748249982.jpg',
+        imageSrc: comicCh4,
         pageNarrative: 'The golden banner flashes across their screens: BOOYAH! 1/4 SQUAD. But the battlegrounds are just getting started.',
         panels: [
           {
@@ -509,7 +510,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
     number: 2,
     title: 'The Shadow Rift',
     subtitle: 'Decoding The Ancient Bermuda Coordinates',
-    coverImage: '/src/assets/images/comic_ch2_shadow_rift_1790748220650.jpg',
+    coverImage: comicCh2,
     synopsis: 'Following the enigmatic light signature observed during the tournament finals, the squad embarks on an expedition to the ancient Observatory ruins. What they find is an anomalous portal pulsing with digital code.',
     badge: 'Anomalies Arc',
     readingTime: '5 min read',
@@ -519,7 +520,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
         pageNumber: 1,
         title: 'Coordinates Decoded',
         subtitle: 'The Ruins of Sector 7',
-        imageSrc: '/src/assets/images/comic_ch2_shadow_rift_1790748220650.jpg',
+        imageSrc: comicCh2,
         pageNarrative: 'Midnight descends upon the island. Veera\'s wrist terminal detects frequency fluctuations identical to the tournament glyph.',
         panels: [
           {
@@ -582,7 +583,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
         pageNumber: 2,
         title: 'Shadow Ambush',
         subtitle: 'Digital Phantoms Strike',
-        imageSrc: '/src/assets/images/comic_ch3_storm_battle_1790748236018.jpg',
+        imageSrc: comicCh3,
         pageNarrative: 'Without warning, cloaked combat droids materialize from the static. Arun slides into cover as plasma bolts shear through the night.',
         panels: [
           {
@@ -635,7 +636,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
     number: 3,
     title: 'Storm of Bermuda',
     subtitle: 'The Electric Tempest & The High Ground',
-    coverImage: '/src/assets/images/comic_ch3_storm_battle_1790748236018.jpg',
+    coverImage: comicCh3,
     synopsis: 'As an anomalous thunderstorm closes in around Clock Tower, the squad orchestrates their most synchronized play yet, pushing their limits in an electrified battle for survival.',
     badge: 'Tactical Arc',
     readingTime: '4 min read',
@@ -645,7 +646,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
         pageNumber: 1,
         title: 'The Electric Wall',
         subtitle: 'Zone Closure Protocol',
-        imageSrc: '/src/assets/images/comic_ch3_storm_battle_1790748236018.jpg',
+        imageSrc: comicCh3,
         pageNarrative: 'The storm border crackles with purple arc lightning. Veera calls an audaciously timed sprint right through the high-risk danger zone.',
         panels: [
           {
@@ -683,7 +684,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
         pageNumber: 2,
         title: 'Marksman Overwatch',
         subtitle: 'One Shot, One Opportunity',
-        imageSrc: '/src/assets/images/comic_ch4_booyah_victory_1790748249982.jpg',
+        imageSrc: comicCh4,
         pageNarrative: 'From the peak of the crane, Karthi holds the entire valley in his crosshairs. He breathes out, waits for the lightning flash, and squeezes the trigger.',
         panels: [
           {
@@ -723,7 +724,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
     number: 4,
     title: 'Ascension: The Booyah Legend',
     subtitle: 'Championship Finale & Eternal Glory',
-    coverImage: '/src/assets/images/comic_ch4_booyah_victory_1790748249982.jpg',
+    coverImage: comicCh4,
     synopsis: 'On the grand championship stadium, against the most formidable international squads, Veera, Arun, Karthi, and Surya prove that friendship, practice, and fearless execution conquer all.',
     badge: 'Championship Finale',
     readingTime: '5 min read',
@@ -733,7 +734,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
         pageNumber: 1,
         title: 'The Grand Stage',
         subtitle: 'Lights, Crowd, and Heartbeats',
-        imageSrc: '/src/assets/images/comic_ch1_squad_call_1790748208639.jpg',
+        imageSrc: comicCh1,
         pageNarrative: 'Thousands of fans chanting their name in the arena. The four teammates share one nod. They have already won each other\'s trust.',
         panels: [
           {
@@ -771,7 +772,7 @@ export const INITIAL_CHAPTERS: Chapter[] = [
         pageNumber: 2,
         title: 'The Ultimate Booyah',
         subtitle: 'Golden Sunset over Bermuda',
-        imageSrc: '/src/assets/images/comic_ch4_booyah_victory_1790748249982.jpg',
+        imageSrc: comicCh4,
         pageNarrative: 'As the final opponent falls, golden confetti rains down. Four friends stand side-by-side against the burning sunset.',
         panels: [
           {
