@@ -1,0 +1,6 @@
+{
+  "name": "Squad Chronicles - Comic Book Reader",
+  "description": "Interactive manga and comic book reader with realistic page swapping, chapter explorer, guided panel view, and custom chapter creator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
